@@ -887,15 +887,20 @@ async function rsSaveOrder() {
   rsLoadOrders();
 }
 
+// Cache of loaded orders for instant copy (no async on tap)
+let rsOrdersCache = [];
+
 async function rsLoadOrders() {
   const el = document.getElementById('rsOrdersList');
   el.innerHTML = '<div style="font-size:0.78rem;color:#888;text-align:center;padding:1.5rem">載入中…</div>';
   const { data, error } = await sb.from('restock_orders').select('*').order('created_at', {ascending: false});
   if (error) { el.innerHTML = `<div class="err-box">載入失敗：${error.message}</div>`; return; }
   if (!data || !data.length) {
+    rsOrdersCache = [];
     el.innerHTML = '<div style="font-size:0.82rem;color:#888;text-align:center;padding:1.5rem">尚無補貨記錄</div>';
     return;
   }
+  rsOrdersCache = data; // cache for instant copy
   el.innerHTML = data.map(order => {
     const items = Array.isArray(order.items) ? order.items : JSON.parse(order.items||'[]');
     const date = order.created_at ? new Date(order.created_at).toLocaleDateString('zh-TW', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
@@ -912,8 +917,8 @@ async function rsLoadOrders() {
           <div style="font-size:0.72rem;color:#999;margin-top:2px">${date} · ${items.length} 項</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn primary" onclick="rsCopyTSV('${order.id}')" style="font-size:0.78rem;padding:5px 10px">📋 複製 TSV</button>
-          <button class="btn ghost" onclick="rsDeleteOrder('${order.id}')" style="font-size:0.78rem;padding:5px 10px;color:#c03030">刪除</button>
+          <button class="btn primary" id="copy-btn-${order.id}" onclick="rsCopyTSV('${order.id}',this)" style="font-size:0.78rem;padding:5px 10px;touch-action:manipulation;-webkit-tap-highlight-color:transparent">📋 複製 TSV</button>
+          <button class="btn ghost" onclick="rsDeleteOrder('${order.id}')" style="font-size:0.78rem;padding:5px 10px;color:#c03030;touch-action:manipulation">刪除</button>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
@@ -935,26 +940,34 @@ async function rsDeleteOrder(id) {
   rsLoadOrders();
 }
 
-function rsCopyTSV(id) {
-  // Find the order from the DOM by re-fetching — simpler: cache orders
-  sb.from('restock_orders').select('*').eq('id', id).single().then(({ data, error }) => {
-    if (error || !data) { alert('找不到資料'); return; }
-    const items = Array.isArray(data.items) ? data.items : JSON.parse(data.items||'[]');
-    const inboundMap = {};
-    INBOUND_PRODUCTS.forEach(p => { inboundMap[p.id] = p; });
-    const tsv = items.map(item => {
-      const p = inboundMap[item.id] || {};
-      return ['A', item.id, item.name, p.unit||'', p.location||'', item.qty, data.notes||'']
-        .map(c => String(c==null?'':c)).join('\t');
-    }).join('\n');
-    navigator.clipboard.writeText(tsv).then(() => {
-      const btns = document.querySelectorAll('#rsOrdersList .btn.primary');
-      btns.forEach(b => { if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(id)) {
-        const orig = b.textContent;
-        b.textContent = '✅ 已複製！';
-        setTimeout(() => { b.textContent = orig; }, 2000);
-      }});
-    });
+function rsCopyTSV(id, btn) {
+  // Use cached data — no async, so iOS clipboard works on tap
+  const order = rsOrdersCache.find(o => o.id === id);
+  if (!order) { alert('請重新整理後再試'); return; }
+  const items = Array.isArray(order.items) ? order.items : JSON.parse(order.items||'[]');
+  const inboundMap = {};
+  INBOUND_PRODUCTS.forEach(p => { inboundMap[p.id] = p; });
+  const tsv = items.map(item => {
+    const p = inboundMap[item.id] || {};
+    return ['A', item.id, item.name, p.unit||'', p.location||'', item.qty, order.notes||'']
+      .map(c => String(c==null?'':c)).join('\t');
+  }).join('\n');
+  navigator.clipboard.writeText(tsv).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✅ 已複製！';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    // iOS fallback: show text area for manual copy
+    const ta = document.createElement('textarea');
+    ta.value = tsv;
+    ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:200px;z-index:9999;font-size:12px;border:2px solid #333;border-radius:8px;padding:8px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const close = document.createElement('button');
+    close.textContent = '✕ 關閉';
+    close.style.cssText = 'position:fixed;top:calc(50% - 130px);left:calc(50% + 100px);transform:translate(-50%,-50%);z-index:10000;padding:8px 14px;background:#333;color:#fff;border:none;border-radius:6px;font-size:14px';
+    close.onclick = () => { document.body.removeChild(ta); document.body.removeChild(close); };
+    document.body.appendChild(close);
   });
 }
 
