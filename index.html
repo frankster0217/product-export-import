@@ -130,7 +130,7 @@
   <div style="font-size:0.8rem;font-weight:500;color:#777;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px">搜尋商品 → 加入入庫清單</div>
   <div class="ib-search-wrap">
     <input type="text" id="ibSearchInput" class="ib-input" placeholder="輸入商品編號或名稱關鍵字…" autocomplete="off"
-      oninput="ibHandleSearch()" onkeydown="ibHandleSearchKey(event)" onfocus="ibShowDropdown()" />
+      oninput="ibHandleSearch()" onkeyup="ibHandleSearch()" onkeydown="ibHandleSearchKey(event)" ontouchend="setTimeout(ibHandleSearch,50)" style="touch-action:manipulation" />
     <ul id="ibDropdown" class="ib-dropdown"></ul>
   </div>
   <div id="ibItems" style="display:none;margin-top:1rem">
@@ -159,7 +159,7 @@
   <div style="font-size:0.8rem;font-weight:500;color:#777;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px">搜尋商品 → 加入補貨清單</div>
   <div class="ib-search-wrap">
     <input type="text" id="rsSearchInput" class="ib-input" placeholder="輸入商品編號或名稱關鍵字…" autocomplete="off"
-      oninput="rsHandleSearch()" onkeydown="rsHandleSearchKey(event)" onfocus="rsShowDropdown()" />
+      oninput="rsHandleSearch()" onkeyup="rsHandleSearch()" onkeydown="rsHandleSearchKey(event)" ontouchend="setTimeout(rsHandleSearch,50)" style="touch-action:manipulation" />
     <ul id="rsDropdown" class="ib-dropdown"></ul>
   </div>
   <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
@@ -608,6 +608,15 @@ function switchTab(name) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // iOS-safe search input listeners
+  const ibInput = document.getElementById('ibSearchInput');
+  ibInput.addEventListener('input', ibHandleSearch);
+  ibInput.addEventListener('focus', ibHandleSearch);
+
+  const rsInput = document.getElementById('rsSearchInput');
+  rsInput.addEventListener('input', rsHandleSearch);
+  rsInput.addEventListener('focus', rsHandleSearch);
+
   document.getElementById('tab-btn-outbound').addEventListener('click', function(e) {
     e.preventDefault(); switchTab('outbound');
   });
@@ -682,6 +691,43 @@ document.addEventListener('click', e => {
   const wrap = document.querySelector('.ib-search-wrap');
   if (wrap && !wrap.contains(e.target)) document.getElementById('ibDropdown').style.display = 'none';
 });
+
+
+function ibShowCustomForm() {
+  document.getElementById('ibDropdown').style.display = 'none';
+  const q = document.getElementById('ibSearchInput').value.trim();
+  document.getElementById('ibSearchInput').value = '';
+  // Show inline custom form
+  const formId = 'ibCustomForm';
+  let form = document.getElementById(formId);
+  if (form) form.remove();
+  const wrap = document.querySelector('.ib-search-wrap');
+  form = document.createElement('div');
+  form.id = formId;
+  form.style.cssText = 'margin-top:8px;padding:12px;background:#f5f5ff;border:1px dashed #99aadd;border-radius:8px';
+  form.innerHTML = `
+    <div style="font-size:0.78rem;font-weight:500;color:#3355aa;margin-bottom:8px">新增自訂商品</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <input id="ibCustomId" placeholder="商品編號" value="${q}"
+        style="flex:1;min-width:100px;padding:6px 10px;border:1px solid #ccd;border-radius:6px;font-size:0.82rem;font-family:inherit">
+      <input id="ibCustomName" placeholder="商品名稱"
+        style="flex:2;min-width:140px;padding:6px 10px;border:1px solid #ccd;border-radius:6px;font-size:0.82rem;font-family:inherit">
+      <button class="btn primary" onclick="ibAddCustomItem()" style="padding:6px 14px;font-size:0.82rem;white-space:nowrap">新增</button>
+      <button class="btn ghost" onclick="document.getElementById('ibCustomForm').remove()" style="padding:6px 10px;font-size:0.82rem">取消</button>
+    </div>`;
+  wrap.parentNode.insertBefore(form, wrap.nextSibling);
+  setTimeout(() => document.getElementById('ibCustomName').focus(), 50);
+}
+
+function ibAddCustomItem() {
+  const id = (document.getElementById('ibCustomId').value||'').trim();
+  const name = (document.getElementById('ibCustomName').value||'').trim();
+  if (!id || !name) { alert('請填入商品編號和商品名稱'); return; }
+  document.getElementById('ibCustomForm').remove();
+  if (ibItems.find(i => i.id === id)) return;
+  ibItems.push({ uid: ibNextId++, id, name, unit: '', location: '', stock: 0, quantity: 1, notes: '' });
+  ibRenderItems();
+}
 
 function ibAddItem(id, name, unit, location, stock) {
   document.getElementById('ibSearchInput').value = '';
