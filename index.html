@@ -503,9 +503,11 @@ function showDropdown() {
   const q = document.getElementById('searchInput').value.toLowerCase().trim();
   const dd = document.getElementById('searchDropdown');
   if (!q) { dd.style.display = 'none'; return; }
-  const hits = PRODUCT_LIST.filter(p =>
-    p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
-  ).slice(0, 10);
+  // Search live from PRODUCT_MAP so newly added custom products appear immediately
+  const hits = Object.entries(PRODUCT_MAP)
+    .filter(([code, name]) => code.toLowerCase().includes(q) || name.toLowerCase().includes(q))
+    .slice(0, 10)
+    .map(([code, name]) => ({ code, name }));
   if (!hits.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = hits.map((p, i) => `
     <li onclick="addManualItem('${p.code.replace(/'/g,"\\'")}','${p.name.replace(/'/g,"\\'")}') "
@@ -665,8 +667,9 @@ function ibShowDropdown() {
   const q = (document.getElementById('ibSearchInput').value || '').toLowerCase().trim();
   const dd = document.getElementById('ibDropdown');
   if (!q) { dd.style.display = 'none'; return; }
+  // Always search live from INBOUND_PRODUCTS so custom products are included
   const hits = INBOUND_PRODUCTS.filter(p =>
-    p.id.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+    (p.id||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q)
   ).slice(0, 12);
   if (!hits.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = hits.map((p, i) => {
@@ -709,11 +712,9 @@ function ibShowCustomForm() {
   document.getElementById('ibDropdown').style.display = 'none';
   const q = document.getElementById('ibSearchInput').value.trim();
   document.getElementById('ibSearchInput').value = '';
-  // Show inline custom form
   const formId = 'ibCustomForm';
   let form = document.getElementById(formId);
-  if (form) form.remove();
-  const wrap = document.querySelector('.ib-search-wrap');
+  if (form) { form.remove(); return; } // toggle off if already open
   form = document.createElement('div');
   form.id = formId;
   form.style.cssText = 'margin-top:8px;padding:12px;background:#f5f5ff;border:1px dashed #99aadd;border-radius:8px';
@@ -727,8 +728,13 @@ function ibShowCustomForm() {
       <button class="btn primary" onclick="ibAddCustomItem()" style="padding:6px 14px;font-size:0.82rem;white-space:nowrap">新增</button>
       <button class="btn ghost" onclick="document.getElementById('ibCustomForm').remove()" style="padding:6px 10px;font-size:0.82rem">取消</button>
     </div>`;
-  wrap.parentNode.insertBefore(form, wrap.nextSibling);
-  setTimeout(() => document.getElementById('ibCustomName').focus(), 50);
+  // Insert after the 新增自訂商品 button using ibDropdown as anchor
+  const dd = document.getElementById('ibDropdown');
+  dd.parentNode.insertBefore(form, dd.nextSibling);
+  setTimeout(() => {
+    const nameInput = document.getElementById('ibCustomName');
+    if (nameInput) nameInput.focus();
+  }, 50);
 }
 
 function ibAddCustomItem() {
